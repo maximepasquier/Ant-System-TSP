@@ -30,7 +30,7 @@ int Roulette_method(std::vector<City_P> p);
 template <typename M, typename S>
 void print_matrix(int t, M matrix, S size);
 float compute_tour_length(Coords cities_list[], int ant_tour[], int cities_number);
-void print_solution(int solution_path[],float solution_path_distance,int cities_number);
+void print_solution(int solution_path[], float solution_path_distance, int cities_number);
 
 int main()
 {
@@ -68,6 +68,12 @@ int main()
     //+ Tao matrix
 
     AS(cities_list, t_max, m, cities_number, Q, rho, alpha, beta);
+
+    /*
+    int ant_tour[cities_number] = {12, 8, 5, 7, 2, 0, 1, 13, 9, 3, 16, 11, 4, 17, 10, 14, 6, 15};
+    float tour_length = compute_tour_length(cities_list, ant_tour, cities_number);
+    std::cout << "tour_length is : " << tour_length << std::endl;
+    */
 }
 
 void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, float rho, float alpha, float beta)
@@ -94,8 +100,6 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
 
     for (int t = 1; t <= t_max; t++)
     {
-        //print_matrix(t,tao, cities_number);
-
         for (int k = 1; k <= m; k++)
         {
             unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -112,12 +116,10 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
             }
             //+ Set origine city as visited
             already_visited[current_city] = true;
-
             //+ Declare ant tour
             int ant_tour[cities_number];
             //+ Initialize starting point
             ant_tour[0] = current_city;
-
             //+ Visit all the other cities
             for (size_t i = 1; i < cities_number; i++)
             {
@@ -165,10 +167,10 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
             }
         }
     }
-    print_solution(solution_path,solution_path_distance,cities_number);
+    print_solution(solution_path, solution_path_distance, cities_number);
 }
 
-void print_solution(int solution_path[],float solution_path_distance,int cities_number)
+void print_solution(int solution_path[], float solution_path_distance, int cities_number)
 {
     std::cout << "Best path is : ";
     for (size_t i = 0; i < cities_number; i++)
@@ -186,9 +188,11 @@ float compute_tour_length(Coords cities_list[], int ant_tour[], int cities_numbe
     {
         int src_city = ant_tour[i];
         int dest_city = ant_tour[i + 1];
-        //std::cout << "dist : " << dist(cities_list[src_city], cities_list[dest_city]) << std::endl;;
+        //std::cout << "dist entre : " << ant_tour[i] << " et " << ant_tour[i + 1] << " is : " << dist(cities_list[src_city], cities_list[dest_city]) << std::endl;
         total_tour_length += dist(cities_list[src_city], cities_list[dest_city]);
     }
+    total_tour_length += dist(cities_list[ant_tour[0]], cities_list[ant_tour[cities_number - 1]]);
+    //std::cout << "back to trace : " << dist(cities_list[ant_tour[0]], cities_list[ant_tour[cities_number - 1]]) << std::endl;
     return total_tour_length;
 }
 

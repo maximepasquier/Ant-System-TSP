@@ -31,15 +31,17 @@ template <typename M, typename S>
 void print_matrix(int t, M matrix, S size);
 float compute_tour_length(Coords cities_list[], int ant_tour[], int cities_number);
 void print_solution(int solution_path[], float solution_path_distance, int cities_number);
+void reset_delta_tao(float **delta_tao, int cities_number);
 
 int main()
 {
+    std::string file_path = "./cities2.dat";
     //* Get number of cities
-    int cities_number = number_of_cities("./cities.dat");
+    int cities_number = number_of_cities(file_path);
     //* Init cities list
     Coords cities_list[cities_number];
     //* Get cities data
-    read_dat("./cities.dat", cities_list);
+    read_dat(file_path, cities_list);
     print_cities(cities_list, cities_number);
 
     //* Greedy minimal distance
@@ -58,8 +60,8 @@ int main()
     std::cout << std::endl;
 
     //* Ant System
-    int t_max = 100;
-    int m = 100;
+    int t_max = 150;
+    int m = 5;
     float Q = Lnn;
     float rho = 0.1;
     float alpha = 1;
@@ -94,12 +96,21 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
         }
     }
 
+    //+ delta tao
+    float **delta_tao = new float *[cities_number];
+    for (int i = 0; i < cities_number; i++)
+    {
+        delta_tao[i] = new float[cities_number];
+    }
+
     //* Solutions
     int solution_path[cities_number];
     float solution_path_distance = 1000;
 
     for (int t = 1; t <= t_max; t++)
     {
+        //print_matrix(t,tao,cities_number);
+        reset_delta_tao(delta_tao, cities_number);
         for (int k = 1; k <= m; k++)
         {
             unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
@@ -149,16 +160,25 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
             {
                 int src_city = ant_tour[i];
                 int dest_city = ant_tour[i + 1];
-                tao[src_city][dest_city] += Q / tour_length;
+                delta_tao[src_city][dest_city] += Q / tour_length;
             }
             //* Ant k has a better solution ?
             if (tour_length < solution_path_distance)
             {
+                /*
+                std::cout << "Better solution of length : " << tour_length << ", and of path : ";
+                for (size_t i = 0; i < cities_number; i++)
+                {
+                    std::cout << ant_tour[i] << " ";
+                }
+                std::cout << std::endl;
+                */
                 solution_path_distance = tour_length;
                 std::copy(ant_tour, ant_tour + cities_number, solution_path);
             }
         }
-        //+ Update tao matrix
+        //* Update tao matrix
+        //+ Evaporation
         for (size_t i = 0; i < cities_number; i++)
         {
             for (size_t j = 0; j < cities_number; j++)
@@ -166,8 +186,27 @@ void AS(Coords cities_list[], int t_max, int m, int cities_number, float Q, floa
                 tao[i][j] = (1 - rho) * tao[i][j];
             }
         }
+        //+ Add delta_tao
+        for (size_t i = 0; i < cities_number; i++)
+        {
+            for (size_t j = 0; j < cities_number; j++)
+            {
+                tao[i][j] += delta_tao[i][j];
+            }
+        }
     }
     print_solution(solution_path, solution_path_distance, cities_number);
+}
+
+void reset_delta_tao(float **delta_tao, int cities_number)
+{
+    for (size_t i = 0; i < cities_number; i++)
+    {
+        for (size_t j = 0; j < cities_number; j++)
+        {
+            delta_tao[i][j] = 0;
+        }
+    }
 }
 
 void print_solution(int solution_path[], float solution_path_distance, int cities_number)

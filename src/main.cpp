@@ -9,32 +9,37 @@
 #include <fstream>
 #include <assert.h>
 
+#define MAX_ITERATIONS 10000
+#define NUMBER_ANTS 20
+
+using precision = float;
+
 typedef struct Coords
 {
-    float X, Y;
+    precision X, Y;
 } Coords;
 
 typedef struct City_P
 {
     int city_number;
-    float city_probability;
+    precision city_probability;
 } City_P;
 
 int number_of_cities(std::string path);
 void read_dat(std::string path, Coords cities_list[]);
 void print_cities(Coords cities_list[], int cities_number);
-float greedy_distance(float **distances, Coords cities_list[], int cities_number);
-float greedy_distance_shuffle(float **distances, Coords cities_list[], int cities_number);
-float dist(Coords current_city, Coords new_city_to_visit);
-void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_number, float Q, float rho, float alpha, float beta, std::ofstream &debug_file);
-float compute_normalizer(float **distances, Coords cities_list[], float **tao, int cities_number, int current_city, bool already_visited[], float alpha, float beta, std::ofstream &debug_file);
-float compute_p(float **distances, Coords cities_list[], float **tao, int cities_number, int current_city, int iterator, bool already_visited[], float alpha, float beta, float normalizer, std::ofstream &debug_file);
+precision greedy_distance(precision **distances, Coords cities_list[], int cities_number);
+precision greedy_distance_shuffle(precision **distances, Coords cities_list[], int cities_number);
+precision dist(Coords current_city, Coords new_city_to_visit);
+void AS(precision **distances, Coords cities_list[], int t_max, int m, int cities_number, precision Q, precision rho, precision alpha, precision beta, std::ofstream &debug_file);
+precision compute_normalizer(precision **distances, Coords cities_list[], precision **tao, int cities_number, int current_city, bool already_visited[], precision alpha, precision beta, std::ofstream &debug_file);
+precision compute_p(precision **distances, Coords cities_list[], precision **tao, int cities_number, int current_city, int iterator, bool already_visited[], precision alpha, precision beta, precision normalizer, std::ofstream &debug_file);
 int Roulette_method(std::vector<City_P> p, std::ofstream &debug_file);
 template <typename M, typename S>
 void print_matrix(int t, M matrix, S size);
-float compute_tour_length(float **distances, Coords cities_list[], int ant_tour[], int cities_number);
-void print_solution(int solution_path[], float solution_path_distance, int cities_number);
-void reset_delta_tao(float **delta_tao, int cities_number);
+precision compute_tour_length(precision **distances, Coords cities_list[], int ant_tour[], int cities_number);
+void print_solution(int solution_path[], precision solution_path_distance, int cities_number);
+void reset_delta_tao(precision **delta_tao, int cities_number);
 
 int main()
 {
@@ -52,10 +57,10 @@ int main()
     debug_file.open("debug_file.txt");
 
     //* Distances matrix
-    float **distances = new float *[cities_number];
+    precision **distances = new precision *[cities_number];
     for (int i = 0; i < cities_number; i++)
     {
-        distances[i] = new float[cities_number]();
+        distances[i] = new precision[cities_number]();
     }
 
     //* Set distances matrix
@@ -83,23 +88,31 @@ int main()
     std::cout << std::endl;
 
     //* Ant System
-    int t_max = 1000;
-    int m = 20;
-    float Q = Lnn;
-    float rho = 0.1;
-    float alpha = 1;
-    float beta = 5;
+    int t_max = MAX_ITERATIONS;
+    int m = NUMBER_ANTS;
+    precision Q = Lnn;
+    precision rho = 0.1;
+    precision alpha = 1;
+    precision beta = 5;
 
+    //+ Compute time of AS
+    auto start = std::chrono::steady_clock::now();
     AS(distances, cities_list, t_max, m, cities_number, Q, rho, alpha, beta, debug_file);
+    auto end = std::chrono::steady_clock::now();
+    auto diff = end - start;
+    std::cout << "Le temps total de AS est de : " << std::chrono::duration<double, std::milli>(diff).count() << " ms" << std::endl;
 }
 
-void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_number, float Q, float rho, float alpha, float beta, std::ofstream& debug_file)
+void AS(precision **distances, Coords cities_list[], int t_max, int m, int cities_number, precision Q, precision rho, precision alpha, precision beta, std::ofstream &debug_file)
 {
+    //* Set number generation
+    unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::default_random_engine generator(seed);
     //+ Tao matrix
-    float **tao = new float *[cities_number];
+    precision **tao = new precision *[cities_number];
     for (int i = 0; i < cities_number; i++)
     {
-        tao[i] = new float[cities_number]();
+        tao[i] = new precision[cities_number]();
     }
 
     //+ Set tao matrix to 1/Q
@@ -112,15 +125,15 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
     }
 
     //+ delta tao
-    float **delta_tao = new float *[cities_number];
+    precision **delta_tao = new precision *[cities_number];
     for (int i = 0; i < cities_number; i++)
     {
-        delta_tao[i] = new float[cities_number];
+        delta_tao[i] = new precision[cities_number];
     }
 
     //* Solutions
     int solution_path[cities_number];
-    float solution_path_distance = 1000;
+    precision solution_path_distance = 1000;
 
     for (int t = 1; t <= t_max; t++)
     {
@@ -128,8 +141,6 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
         reset_delta_tao(delta_tao, cities_number);
         for (int k = 1; k <= m; k++)
         {
-            unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
-            std::default_random_engine generator(seed);
             std::uniform_int_distribution<int> distribution(0, cities_number - 1);
             //+ Define the starting point for the ant k
             int current_city = distribution(generator);
@@ -152,7 +163,7 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
                 //+ Init vector of probabilities
                 std::vector<City_P> p;
                 //+ Compute normalizer
-                float normalizer = compute_normalizer(distances, cities_list, tao, cities_number, current_city, already_visited, alpha, beta, debug_file);
+                precision normalizer = compute_normalizer(distances, cities_list, tao, cities_number, current_city, already_visited, alpha, beta, debug_file);
                 //std::cout << "normalizer : " << normalizer << std::endl;
                 for (int iterator = 0; iterator < cities_number; iterator++)
                 {
@@ -173,7 +184,7 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
                 current_city = city_destination;
             }
             //+ Compute length of the ant tour
-            float tour_length = compute_tour_length(distances, cities_list, ant_tour, cities_number);
+            precision tour_length = compute_tour_length(distances, cities_list, ant_tour, cities_number);
             //+ Compute d_tao on the path of the ant
             for (int i = 0; i < cities_number - 1; i++)
             {
@@ -202,7 +213,12 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
         {
             for (size_t j = 0; j < cities_number; j++)
             {
-                tao[i][j] = (1 - rho) * tao[i][j];
+                //! Stop evaporation if tao[i][j] is extremely small
+                precision threshold = 0.001;
+                if (tao[i][j] > threshold)
+                {
+                    tao[i][j] = (1 - rho) * tao[i][j];
+                }
             }
         }
         //+ Add delta_tao
@@ -217,7 +233,7 @@ void AS(float **distances, Coords cities_list[], int t_max, int m, int cities_nu
     print_solution(solution_path, solution_path_distance, cities_number);
 }
 
-void reset_delta_tao(float **delta_tao, int cities_number)
+void reset_delta_tao(precision **delta_tao, int cities_number)
 {
     for (size_t i = 0; i < cities_number; i++)
     {
@@ -228,7 +244,7 @@ void reset_delta_tao(float **delta_tao, int cities_number)
     }
 }
 
-void print_solution(int solution_path[], float solution_path_distance, int cities_number)
+void print_solution(int solution_path[], precision solution_path_distance, int cities_number)
 {
     std::cout << "Best path is : ";
     for (size_t i = 0; i < cities_number; i++)
@@ -239,9 +255,9 @@ void print_solution(int solution_path[], float solution_path_distance, int citie
     std::cout << "Distance of this path is : " << solution_path_distance << std::endl;
 }
 
-float compute_tour_length(float **distances, Coords cities_list[], int ant_tour[], int cities_number)
+precision compute_tour_length(precision **distances, Coords cities_list[], int ant_tour[], int cities_number)
 {
-    float total_tour_length = 0;
+    precision total_tour_length = 0;
     for (size_t i = 0; i < cities_number - 1; i++)
     {
         int src_city = ant_tour[i];
@@ -256,7 +272,7 @@ float compute_tour_length(float **distances, Coords cities_list[], int ant_tour[
     return total_tour_length;
 }
 
-int Roulette_method(std::vector<City_P> p, std::ofstream& debug_file)
+int Roulette_method(std::vector<City_P> p, std::ofstream &debug_file)
 {
     unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator(seed);
@@ -265,22 +281,21 @@ int Roulette_method(std::vector<City_P> p, std::ofstream& debug_file)
 
     //* Sum of proba is == 1 ?
 
-    float sum = 0;
-    for(City_P item : p)
+    precision sum = 0;
+    for (City_P item : p)
     {
         sum += item.city_probability;
     }
     //std::cout << " sum is : " << sum << std::endl;
     //assert(sum == 1.0);
-    if(sum != 1.0)
+    if (sum != 1.0)
     {
         //std::cout << "DFSHJKSDFJKLHSDHFJKLFSDHJLKHSFDJKHJKSDF" << std::endl;
     }
-    
 
     for (City_P item : p)
     {
-        float tmp_proba;
+        precision tmp_proba;
         if (!probabilities_cumul.empty())
         {
             tmp_proba = probabilities_cumul.back().city_probability;
@@ -311,15 +326,13 @@ int Roulette_method(std::vector<City_P> p, std::ofstream& debug_file)
         std::cout << "city number is : " << item.city_number << ", and city proba is : " << item.city_probability << std::endl;
     }
     std::cout << "random number is :" << r << std::endl;
-    int return_value = -1;
-    assert(return_value = 3);
-    return return_value;
+    return -1;
 }
 
-float compute_normalizer(float **distances, Coords cities_list[], float **tao, int cities_number, int current_city, bool already_visited[], float alpha, float beta, std::ofstream& debug_file)
+precision compute_normalizer(precision **distances, Coords cities_list[], precision **tao, int cities_number, int current_city, bool already_visited[], precision alpha, precision beta, std::ofstream &debug_file)
 {
     //+ Compute the sum for the normalization of p
-    float normalizer = 0;
+    precision normalizer = 0;
     //+ Parcourir les villes pour récupérer les non visitées
     for (size_t l = 0; l < cities_number; l++)
     {
@@ -328,15 +341,17 @@ float compute_normalizer(float **distances, Coords cities_list[], float **tao, i
         {
             //+ Sommer et additionner au normalisateur
             //normalizer += pow(tao[current_city][l], alpha) * pow(1 / dist(cities_list[current_city], cities_list[l]), beta);
+            //std::cout << tao[current_city][l] << std::endl;
             normalizer += pow(tao[current_city][l], alpha) * pow(1 / distances[current_city][l], beta);
         }
     }
     return normalizer;
 }
 
-float compute_p(float **distances, Coords cities_list[], float **tao, int cities_number, int current_city, int iterator, bool already_visited[], float alpha, float beta, float normalizer, std::ofstream& debug_file)
+precision compute_p(precision **distances, Coords cities_list[], precision **tao, int cities_number, int current_city, int iterator, bool already_visited[], precision alpha, precision beta, precision normalizer, std::ofstream &debug_file)
 {
     //return pow(tao[current_city][iterator], alpha) * pow(1 / dist(cities_list[current_city], cities_list[iterator]), beta) / normalizer;
+    //std::cout << tao[current_city][iterator] << std::endl;
     return pow(tao[current_city][iterator], alpha) * pow(1 / distances[current_city][iterator], beta) / normalizer;
 }
 
@@ -411,14 +426,14 @@ void print_cities(Coords cities_list[], int cities_number)
     std::cout << std::endl;
 }
 
-float greedy_distance(float **distances, Coords cities_list[], int cities_number)
+precision greedy_distance(precision **distances, Coords cities_list[], int cities_number)
 {
     unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator(seed);
     std::uniform_int_distribution<int> distribution(0, cities_number - 1);
     int r = distribution(generator);
     int origine = r;
-    float total_distance = 0;
+    precision total_distance = 0;
     bool already_visited[cities_number];
     for (int i = 0; i < cities_number; i++)
     {
@@ -430,15 +445,15 @@ float greedy_distance(float **distances, Coords cities_list[], int cities_number
     for (int i = 0; i < cities_number - 1; i++)
     {
 
-        float min_distance = 1000;
+        precision min_distance = 1000;
         int min_city;
         for (int new_city_to_visit = 0; new_city_to_visit < cities_number; new_city_to_visit++)
             for (int a = 0; a < cities_number; a++)
             {
                 if (!already_visited[new_city_to_visit])
                 {
-                    //float local_distance = dist(cities_list[current_city], cities_list[new_city_to_visit]);
-                    float local_distance = distances[current_city][new_city_to_visit];
+                    //precision local_distance = dist(cities_list[current_city], cities_list[new_city_to_visit]);
+                    precision local_distance = distances[current_city][new_city_to_visit];
                     if (local_distance < min_distance)
                     {
                         min_distance = local_distance;
@@ -457,14 +472,14 @@ float greedy_distance(float **distances, Coords cities_list[], int cities_number
     return total_distance;
 }
 
-float greedy_distance_shuffle(float **distances, Coords cities_list[], int cities_number)
+precision greedy_distance_shuffle(precision **distances, Coords cities_list[], int cities_number)
 {
     unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::default_random_engine generator(seed);
     std::uniform_int_distribution<int> distribution(0, cities_number - 1);
     int r = distribution(generator);
     int origine = r;
-    float total_distance = 0;
+    precision total_distance = 0;
     bool already_visited[cities_number];
     for (int i = 0; i < cities_number; i++)
     {
@@ -476,7 +491,7 @@ float greedy_distance_shuffle(float **distances, Coords cities_list[], int citie
     for (int i = 0; i < cities_number - 1; i++)
     {
 
-        float min_distance = 1000;
+        precision min_distance = 1000;
         int min_city;
         int list_cities[cities_number];
         for (int b = 0; b < cities_number; b++)
@@ -499,7 +514,7 @@ float greedy_distance_shuffle(float **distances, Coords cities_list[], int citie
             {
                 if (!already_visited[new_city_to_visit])
                 {
-                    float local_distance = distances[current_city][new_city_to_visit];
+                    precision local_distance = distances[current_city][new_city_to_visit];
                     if (local_distance < min_distance)
                     {
                         min_distance = local_distance;
@@ -518,14 +533,14 @@ float greedy_distance_shuffle(float **distances, Coords cities_list[], int citie
     return total_distance;
 }
 
-float dist(Coords current_city, Coords new_city_to_visit)
+precision dist(Coords current_city, Coords new_city_to_visit)
 {
     //std::cout << current_city.X << " " << new_city_to_visit.X << " : " << current_city.Y << " " << new_city_to_visit.Y << std::endl;
-    float delta_X = current_city.X - new_city_to_visit.X;
-    float delta_Y = current_city.Y - new_city_to_visit.Y;
+    precision delta_X = current_city.X - new_city_to_visit.X;
+    precision delta_Y = current_city.Y - new_city_to_visit.Y;
     //std::cout << "delta_X : " << delta_X << ", delta_Y : " << delta_Y << std::endl;
 
-    float distance = sqrt(pow(delta_X, 2) + pow(delta_Y, 2));
+    precision distance = sqrt(pow(delta_X, 2) + pow(delta_Y, 2));
 
     //std::cout << "distance : " << distance << std::endl;
     //std::cout << std::endl;
